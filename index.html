@@ -2,18 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-
-
-
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Resource & Monster Map with Quests</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/konva@8.3.5/konva.min.js"></script>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
+  <div id="gameContainer"></div>
 
   <div id="rewardPopup" class="reward-popup"></div>
-
 
   <div class="ui-panel top-panel">
     <div class="resources">
@@ -36,18 +33,10 @@
     <div id="battleLog" class="log-content"></div>
   </div>
 
-  <div class="ui-panel minimap-panel">
-    <canvas id="minimap"></canvas>
-  </div>
-
-
-  <div id="tooltip"></div>
-
   <div class="ui-panel quest-panel">
     <h3>Quests</h3>
     <ul id="questList"></ul>
   </div>
-  
 
   <script src="script.js"></script>
 </body>
