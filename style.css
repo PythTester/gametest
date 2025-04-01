@@ -1,0 +1,175 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #1e1e1e;
+    font-family: 'Segoe UI', sans-serif;
+  }
+  
+  #gameCanvas {
+    display: block;
+  }
+  
+  .ui-panel {
+    position: fixed;
+    background: rgba(0, 0, 0, 0.85);
+    color: #eee;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    z-index: 10;
+    box-shadow: 0 0 10px rgba(0,0,0,0.7);
+  }
+  
+  .top-panel {
+    top: 10px;
+    left: 10px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    background: rgba(20,20,20,0.95);
+  }
+  
+  .resources span {
+    margin-right: 12px;
+    font-weight: bold;
+    color: #b0f542;
+  }
+  
+  .troops button {
+    margin-right: 5px;
+    margin-top: 5px;
+    padding: 4px 10px;
+    font-size: 12px;
+    border: none;
+    border-radius: 4px;
+    background: #444;
+    color: #eee;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  
+  .troops button:hover {
+    background: #666;
+  }
+  
+  .log-panel {
+    bottom: 10px;
+    right: 10px;
+    width: 260px;
+    background: rgba(15, 15, 15, 0.95);
+  }
+  
+  #toggleLog {
+    width: 100%;
+    padding: 6px;
+    background: #333;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    border-radius: 4px;
+    transition: background 0.2s;
+  }
+  
+  #toggleLog:hover {
+    background: #444;
+  }
+  
+  .log-content {
+    max-height: 140px;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    padding-top: 8px;
+  }
+  
+  .log-content.collapsed {
+    max-height: 0;
+    padding-top: 0;
+  }
+  
+  #battleLog p {
+    margin: 4px 0;
+    font-size: 12px;
+    color: #ddd;
+  }
+  
+  .minimap-panel {
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.9);
+    padding: 6px;
+    border-radius: 6px;
+  }
+  
+  #minimap {
+    width: 200px;
+    height: 200px;
+    background: #111;
+    border: 1px solid #555;
+    display: block;
+  }
+  
+  .quest-panel {
+    bottom: 10px;
+    left: 10px;
+    width: 260px;
+    background: rgba(15, 15, 15, 0.95);
+    padding: 12px;
+    border-radius: 6px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.7);
+  }
+  
+  .quest-panel h3 {
+    margin-top: 0;
+    font-size: 16px;
+    color: #ffda44;
+  }
+  
+  #questList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  #questList li {
+    margin-bottom: 8px;
+    padding: 8px;
+    background: rgba(50, 50, 50, 0.9);
+    border-radius: 4px;
+    font-size: 14px;
+    color: #eee;
+  }
+  
+  #tooltip {
+    position: absolute;
+    background: rgba(0,0,0,0.85);
+    color: #fff;
+    padding: 5px 8px;
+    border-radius: 4px;
+    pointer-events: none;
+    display: none;
+    font-size: 12px;
+    z-index: 99;
+  }
+  
+  .reward-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1);
+    background: rgba(0, 0, 0, 0.9);
+    color: #ffda44;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 16px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 100;
+    transition: transform 0.5s, opacity 0.5s;
+  }
+  
+  .reward-popup.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  
