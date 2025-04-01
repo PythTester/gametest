@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Resource & Monster Map with Quests</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/konva@8.3.5/konva.min.js"></script>
+</head>
+<body>
+  <div id="gameContainer"></div>
+
+  <div id="rewardPopup" class="reward-popup"></div>
+
+  <div class="ui-panel top-panel">
+    <div class="resources">
+      <span>🌲 <span id="wood">0</span></span>
+      <span>🪨 <span id="stone">0</span></span>
+      <span>💰 <span id="gold">0</span></span>
+    </div>
+    <div class="troops">
+      <button onclick="buildTroop('infantry')">+ Infantry</button>
+      <span id="infantryCount">0</span>
+      <button onclick="buildTroop('archer')">+ Archer</button>
+      <span id="archerCount">0</span>
+      <button onclick="buildTroop('cavalry')">+ Cavalry</button>
+      <span id="cavalryCount">0</span>
+    </div>
+  </div>
+
+  <div class="ui-panel log-panel">
+    <button id="toggleLog">Battle Log ▲</button>
+    <div id="battleLog" class="log-content"></div>
+  </div>
+
+  <div class="ui-panel quest-panel">
+    <h3>Quests</h3>
+    <ul id="questList"></ul>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
