@@ -1,49 +1,85 @@
-document.addEventListener('gesturestart', e => e.preventDefault());
-document.addEventListener('gesturechange', e => e.preventDefault());
-document.addEventListener('gestureend', e => e.preventDefault());
-
-
-
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-
-const minimap = document.getElementById('minimap');
-const minimapCtx = minimap.getContext('2d');
-minimap.width = 200;
-minimap.height = 200;
+const mapWidth = 15000;
+const mapHeight = 15000;
+const spotSize = 50;
+const minDistance = 70;
+const troopSpeed = 300;
 
 let resources = { wood: 0, stone: 0, gold: 0 };
+const troops = { infantry: 0, archer: 0, cavalry: 0 };
+let questSetNumber = 1;
+let quests = [];
+let spots = [];
+let marchTimer = null;
+
 const resourceDisplay = {
   wood: document.getElementById('wood'),
   stone: document.getElementById('stone'),
   gold: document.getElementById('gold')
 };
-
-const tooltip = document.getElementById('tooltip');
+const troopDisplay = {
+  infantry: document.getElementById('infantryCount'),
+  archer: document.getElementById('archerCount'),
+  cavalry: document.getElementById('cavalryCount')
+};
 const battleLog = document.getElementById('battleLog');
 const toggleLogBtn = document.getElementById('toggleLog');
 const logContent = document.getElementById('battleLog');
+const questListEl = document.getElementById('questList');
 
-// --- Map Variables ---
-const mapWidth = 15000;
-const mapHeight = 15000;
-let offsetX = 0;
-let offsetY = 0;
-let zoom = 1;
+// === KONVA INIT ===
+const stage = new Konva.Stage({
+  container: 'gameContainer',
+  width: window.innerWidth,
+  height: window.innerHeight,
+  draggable: true
+});
+const layer = new Konva.Layer();
+stage.add(layer);
 
-// --- Spot Variables ---
-const spots = [];
-const spotSize = 50;
-const spotTypes = ['wood', 'stone', 'gold', 'monster'];
-const minDistance = 70;
+// --- ZOOM ---
+const scaleBy = 1.05;
+stage.on('wheel', e => {
+  e.evt.preventDefault();
+  const oldScale = stage.scaleX();
+  const pointer = stage.getPointerPosition();
+  const mousePointTo = {
+    x: (pointer.x - stage.x()) / oldScale,
+    y: (pointer.y - stage.y()) / oldScale
+  };
+  const direction = e.evt.deltaY > 0 ? 1 : -1;
+  const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+  stage.scale({ x: newScale, y: newScale });
+  const newPos = {
+    x: pointer.x - mousePointTo.x * newScale,
+    y: pointer.y - mousePointTo.y * newScale
+  };
+  stage.position(newPos);
+  stage.batchDraw();
+});
 
-// --- Troop Movement ---
-let marchTimer = null;
-const troopSpeed = 300; // Higher = slower
+// --- PINCH ---
+let lastDist = 0;
+stage.on('touchmove', e => {
+  e.evt.preventDefault();
+  const touch1 = e.evt.touches[0];
+  const touch2 = e.evt.touches[1];
+  if (touch1 && touch2) {
+    const dist = getDistance(
+      { x: touch1.clientX, y: touch1.clientY },
+      { x: touch2.clientX, y: touch2.clientY }
+    );
+    if (!lastDist) lastDist = dist;
+    const scale = stage.scaleX() * (dist / lastDist);
+    stage.scale({ x: scale, y: scale });
+    lastDist = dist;
+  }
+});
+stage.on('touchend', () => { lastDist = 0; });
+function getDistance(p1, p2) {
+  return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+}
 
-// --- Generate Spots ---
+// --- Generate Map ---
 function generateSpots(count) {
   let attempts = 0;
   while (spots.length < count && attempts < count * 10) {
@@ -51,12 +87,13 @@ function generateSpots(count) {
     const newSpot = {
       x: Math.random() * mapWidth,
       y: Math.random() * mapHeight,
-      type: spotTypes[Math.floor(Math.random() * spotTypes.length)],
+      type: ['wood', 'stone', 'gold', 'monster'][Math.floor(Math.random() * 4)],
       level: Math.floor(Math.random() * 30) + 1,
       collected: false
     };
     if (isValidPosition(newSpot)) {
       spots.push(newSpot);
+      addSpotToLayer(newSpot);
     }
   }
 }
@@ -69,7 +106,44 @@ function isValidPosition(spot) {
   });
 }
 
-function respawnSpot(oldSpot) {
+function addSpotToLayer(spot) {
+  const rect = new Konva.Rect({
+    x: spot.x,
+    y: spot.y,
+    width: spotSize,
+    height: spotSize,
+    fill: spot.type === 'monster' ? 'red' : spot.type === 'wood' ? 'green' : spot.type === 'stone' ? 'gray' : 'yellow',
+    stroke: 'black',
+    strokeWidth: 1
+  });
+  rect.on('click tap', () => handleSpotClick(spot, rect));
+  layer.add(rect);
+  layer.batchDraw();
+}
+
+function handleSpotClick(spot, rect) {
+  if (spot.collected) return;
+  if (spot.type === 'monster') {
+    if (!marchTimer) startMarch(spot);
+  } else {
+    collectResource(spot, rect);
+  }
+}
+
+function collectResource(spot, rect) {
+  resources[spot.type]++;
+  resourceDisplay[spot.type].textContent = resources[spot.type];
+  spot.collected = true;
+  rect.destroy();
+  setTimeout(() => {
+    const index = spots.indexOf(spot);
+    if (index !== -1) spots.splice(index, 1);
+    respawnSpot();
+  }, 30000);
+  updateQuestProgress('resource', spot.type);
+}
+
+function respawnSpot() {
   let newSpot;
   let tries = 0;
   do {
@@ -77,7 +151,7 @@ function respawnSpot(oldSpot) {
     newSpot = {
       x: Math.random() * mapWidth,
       y: Math.random() * mapHeight,
-      type: spotTypes[Math.floor(Math.random() * spotTypes.length)],
+      type: ['wood', 'stone', 'gold', 'monster'][Math.floor(Math.random() * 4)],
       level: Math.floor(Math.random() * 30) + 1,
       collected: false
     };
@@ -85,117 +159,8 @@ function respawnSpot(oldSpot) {
 
   if (tries < 100) {
     spots.push(newSpot);
+    addSpotToLayer(newSpot);
   }
-}
-
-// --- Mouse Controls ---
-let isDragging = false;
-let startX, startY;
-
-canvas.addEventListener('mousedown', e => {
-  isDragging = true;
-  startX = e.clientX - offsetX;
-  startY = e.clientY - offsetY;
-});
-
-canvas.addEventListener('mouseup', () => {
-  isDragging = false;
-});
-
-canvas.addEventListener('mousemove', e => {
-  if (isDragging) {
-    offsetX = e.clientX - startX;
-    offsetY = e.clientY - startY;
-    clampOffset();
-  }
-
-  // Tooltip hover
-  const mouseX = (e.clientX - offsetX) / zoom;
-  const mouseY = (e.clientY - offsetY) / zoom;
-  let hovered = false;
-
-  spots.forEach(spot => {
-    if (!spot.collected &&
-      spot.type === 'monster' &&
-      mouseX > spot.x && mouseX < spot.x + spotSize &&
-      mouseY > spot.y && mouseY < spot.y + spotSize) {
-      tooltip.style.display = 'block';
-      tooltip.style.left = e.clientX + 10 + 'px';
-      tooltip.style.top = e.clientY + 10 + 'px';
-      tooltip.textContent = `Monster Lvl ${spot.level}`;
-      hovered = true;
-    }
-  });
-
-  if (!hovered) {
-    tooltip.style.display = 'none';
-  }
-});
-
-canvas.addEventListener('wheel', e => {
-  e.preventDefault();
-  zoom += e.deltaY * -0.001;
-  zoom = Math.min(Math.max(0.3, zoom), 2);
-  clampOffset();
-});
-
-// --- Minimap Click ---
-minimap.addEventListener('click', e => {
-  const rect = minimap.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / minimap.width;
-  const y = (e.clientY - rect.top) / minimap.height;
-  offsetX = -(x * mapWidth - canvas.width / (2 * zoom)) * zoom;
-  offsetY = -(y * mapHeight - canvas.height / (2 * zoom)) * zoom;
-  clampOffset();
-});
-
-// --- Scroll Limit ---
-function clampOffset() {
-  const maxOffsetX = 0;
-  const maxOffsetY = 0;
-  const minOffsetX = canvas.width - mapWidth * zoom;
-  const minOffsetY = canvas.height - mapHeight * zoom;
-  offsetX = Math.min(Math.max(offsetX, minOffsetX), maxOffsetX);
-  offsetY = Math.min(Math.max(offsetY, minOffsetY), maxOffsetY);
-}
-
-// --- Click Interaction ---
-canvas.addEventListener('click', e => {
-  const mouseX = (e.clientX - offsetX) / zoom;
-  const mouseY = (e.clientY - offsetY) / zoom;
-
-  const spot = spots.find(s =>
-    !s.collected &&
-    mouseX > s.x && mouseX < s.x + spotSize &&
-    mouseY > s.y && mouseY < s.y + spotSize
-  );
-
-  if (spot) {
-    if (spot.type === 'monster') {
-      if (!marchTimer) startMarch(spot);
-    } else {
-      collectResource(spot);
-    }
-  }
-});
-
-function collectResource(spot) {
-  resources[spot.type]++;
-  resourceDisplay[spot.type].textContent = resources[spot.type];
-  spot.collected = true;
-  setTimeout(() => {
-    const index = spots.indexOf(spot);
-    if (index !== -1) spots.splice(index, 1);
-    respawnSpot(spot);
-  }, 30000);
-}
-
-// --- March System ---
-function calculateTravelTime(startX, startY, targetX, targetY) {
-  const dx = targetX - startX;
-  const dy = targetY - startY;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-  return Math.ceil(distance / troopSpeed);
 }
 
 function startMarch(target) {
@@ -203,13 +168,11 @@ function startMarch(target) {
     alert('No troops! Build troops first!');
     return;
   }
-
-  const startX = (canvas.width / 2 - offsetX) / zoom;
-  const startY = (canvas.height / 2 - offsetY) / zoom;
+  const start = stage.getAbsolutePosition();
+  const startX = -start.x / stage.scaleX() + window.innerWidth / 2 / stage.scaleX();
+  const startY = -start.y / stage.scaleY() + window.innerHeight / 2 / stage.scaleY();
   const travelTime = calculateTravelTime(startX, startY, target.x, target.y);
-
   logBattle(`🚶‍♂️ Troops marching to Lvl ${target.level} monster. ETA: ${travelTime}s`);
-
   let remainingTime = travelTime;
   marchTimer = setInterval(() => {
     remainingTime--;
@@ -223,102 +186,88 @@ function startMarch(target) {
   }, 1000);
 }
 
+function calculateTravelTime(sx, sy, tx, ty) {
+  const dx = tx - sx;
+  const dy = ty - sy;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  return Math.ceil(distance / troopSpeed);
+}
+
 function engageBattle(monster) {
-    if (monster.collected) {
-      logBattle(`⚠️ Monster Lvl ${monster.level} is already defeated.`);
-      return;
-    }
-  
-    const monsterPower = monster.level * 5;
-    const playerPower = troops.infantry * 3 + troops.archer * 4 + troops.cavalry * 6;
-  
-    if (playerPower >= monsterPower) {
-      let goldReward = 0;
-      let resourceBonus = { wood: 0, stone: 0, gold: 0 };
-  
-      if (monster.level <= 4) {
-        goldReward = randomInt(1, 2);
-      } else if (monster.level <= 10) {
-        goldReward = randomInt(2, 6);
-        resourceBonus = { wood: 1, stone: 1, gold: 1 };
-      } else if (monster.level <= 18) {
-        goldReward = randomInt(5, 13);
-      } else if (monster.level <= 20) {
-        goldReward = randomInt(5, 13);
-        resourceBonus = { wood: 3, stone: 3, gold: 3 };
-      } else {
-        goldReward = randomInt(10, 20);
-        resourceBonus = { wood: 5, stone: 5, gold: 5 };
-      }
-  
-      resources.gold += goldReward;
-      resourceDisplay.gold.textContent = resources.gold;
-  
-      // Add resources
-      Object.keys(resourceBonus).forEach(key => {
-        resources[key] += resourceBonus[key];
-        resourceDisplay[key].textContent = resources[key];
-      });
-  
-      logBattle(`✅ Defeated Lvl ${monster.level} monster! +${goldReward} Gold ${resourceBonus.wood ? `+${resourceBonus.wood} of each resource` : ''}`);
-      showRewardPopup(`+${goldReward} 💰 Gold${resourceBonus.wood ? ` & +${resourceBonus.wood} Resources` : ''}`);
-  
-      monster.collected = true;
-      setTimeout(() => {
-        const index = spots.indexOf(monster);
-        if (index !== -1) spots.splice(index, 1);
-        respawnSpot(monster);
-      }, 30000);
+  if (monster.collected) {
+    logBattle(`⚠️ Monster Lvl ${monster.level} already defeated.`);
+    return;
+  }
+  const monsterPower = monster.level * 5;
+  const playerPower = troops.infantry * 3 + troops.archer * 4 + troops.cavalry * 6;
+  if (playerPower >= monsterPower) {
+    let goldReward = 0;
+    let resourceBonus = { wood: 0, stone: 0, gold: 0 };
+    if (monster.level <= 4) goldReward = randomInt(1, 2);
+    else if (monster.level <= 10) {
+      goldReward = randomInt(2, 6);
+      resourceBonus = { wood: 1, stone: 1, gold: 1 };
+    } else if (monster.level <= 18) goldReward = randomInt(5, 13);
+    else if (monster.level <= 20) {
+      goldReward = randomInt(5, 13);
+      resourceBonus = { wood: 3, stone: 3, gold: 3 };
     } else {
-      loseTroops();
-      logBattle(`❌ You lost to Lvl ${monster.level} monster! Troops lost.`);
+      goldReward = randomInt(10, 20);
+      resourceBonus = { wood: 5, stone: 5, gold: 5 };
     }
-  }
-  
-  function randomInt(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  }
-  
-
-  function showRewardPopup(text) {
-    const popup = document.getElementById('rewardPopup');
-    popup.textContent = text;
-    popup.classList.add('show');
+    resources.gold += goldReward;
+    resourceDisplay.gold.textContent = resources.gold;
+    Object.keys(resourceBonus).forEach(key => {
+      resources[key] += resourceBonus[key];
+      resourceDisplay[key].textContent = resources[key];
+    });
+    logBattle(`✅ Defeated Lvl ${monster.level} monster! +${goldReward} Gold`);
+    showRewardPopup(`+${goldReward} 💰 Gold`);
+    monster.collected = true;
+    layer.find(node => node.attrs.x === monster.x && node.attrs.y === monster.y)[0].destroy();
     setTimeout(() => {
-      popup.classList.remove('show');
-    }, 1000);
+      const index = spots.indexOf(monster);
+      if (index !== -1) spots.splice(index, 1);
+      respawnSpot();
+    }, 30000);
+    updateQuestProgress('monster');
+  } else {
+    loseTroops();
+    logBattle(`❌ You lost to Lvl ${monster.level} monster! Troops lost.`);
   }
-  
+}
 
-// --- Troop Data ---
-let troops = {
-  infantry: 0,
-  archer: 0,
-  cavalry: 0
-};
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
+function showRewardPopup(text) {
+  const popup = document.getElementById('rewardPopup');
+  popup.textContent = text;
+  popup.classList.add('show');
+  setTimeout(() => {
+    popup.classList.remove('show');
+  }, 1000);
+}
+
+// === TROOPS & QUESTS ===
 const troopCost = {
   infantry: { wood: 2, stone: 1, gold: 0 },
   archer: { wood: 1, stone: 0, gold: 2 },
   cavalry: { wood: 0, stone: 3, gold: 3 }
 };
 
-const troopDisplay = {
-  infantry: document.getElementById('infantryCount'),
-  archer: document.getElementById('archerCount'),
-  cavalry: document.getElementById('cavalryCount')
-};
-
 function buildTroop(type) {
   const cost = troopCost[type];
-  const canBuild = Object.keys(cost).every(resource => resources[resource] >= cost[resource]);
+  const canBuild = Object.keys(cost).every(r => resources[r] >= cost[r]);
   if (canBuild) {
-    Object.keys(cost).forEach(resource => {
-      resources[resource] -= cost[resource];
-      resourceDisplay[resource].textContent = resources[resource];
+    Object.keys(cost).forEach(r => {
+      resources[r] -= cost[r];
+      resourceDisplay[r].textContent = resources[r];
     });
     troops[type]++;
     troopDisplay[type].textContent = troops[type];
+    updateQuestProgress('troop', type);
   } else {
     alert('Not enough resources!');
   }
@@ -349,60 +298,10 @@ function logBattle(message) {
   }
 }
 
-// --- Drawing ---
-function draw() {
-  ctx.setTransform(zoom, 0, 0, zoom, offsetX, offsetY);
-  ctx.clearRect(-offsetX / zoom, -offsetY / zoom, canvas.width / zoom, canvas.height / zoom);
-  ctx.clearRect(0, 0, mapWidth, mapHeight);
-
-  spots.forEach(spot => {
-    if (spot.collected) return;
-    if (spot.type === 'monster') ctx.fillStyle = 'red';
-    else if (spot.type === 'wood') ctx.fillStyle = 'green';
-    else if (spot.type === 'stone') ctx.fillStyle = 'gray';
-    else ctx.fillStyle = 'yellow';
-    ctx.fillRect(spot.x, spot.y, spotSize, spotSize);
-  });
-
-  drawMinimap();
-  requestAnimationFrame(draw);
-}
-
-// --- Minimap ---
-function drawMinimap() {
-  minimapCtx.clearRect(0, 0, minimap.width, minimap.height);
-  minimapCtx.fillStyle = '#222';
-  minimapCtx.fillRect(0, 0, minimap.width, minimap.height);
-
-  const scaleX = minimap.width / mapWidth;
-  const scaleY = minimap.height / mapHeight;
-
-  spots.forEach(spot => {
-    if (spot.collected) return;
-    minimapCtx.fillStyle = spot.type === 'monster' ? 'red' : 'green';
-    minimapCtx.fillRect(spot.x * scaleX, spot.y * scaleY, 2, 2);
-  });
-
-  minimapCtx.strokeStyle = 'white';
-  minimapCtx.strokeRect(
-    (-offsetX / zoom) * scaleX,
-    (-offsetY / zoom) * scaleY,
-    (canvas.width / zoom) * scaleX,
-    (canvas.height / zoom) * scaleY
-  );
-}
-
 // === QUEST SYSTEM ===
-const questListEl = document.getElementById('questList');
-
-let questSetNumber = 1;
-let quests = [];
-
 function generateQuests() {
   quests = [];
-  const baseAmount = Math.pow(2, questSetNumber - 1) * 5; // 5, 10, 20, 40...
-
-  // Random Quest 1 - Resource Collection
+  const baseAmount = Math.pow(2, questSetNumber - 1) * 5;
   const resourceType = ['wood', 'stone', 'gold'][Math.floor(Math.random() * 3)];
   quests.push({
     id: 1,
@@ -414,8 +313,6 @@ function generateQuests() {
     completed: false,
     reward: { gold: baseAmount }
   });
-
-  // Random Quest 2 - Monster Hunt
   quests.push({
     id: 2,
     description: `Defeat ${Math.ceil(baseAmount / 2)} Monsters`,
@@ -425,9 +322,6 @@ function generateQuests() {
     completed: false,
     reward: { stone: baseAmount, gold: Math.ceil(baseAmount / 2) }
   });
-  
-
-  // Random Quest 3 - Troop Building
   const troopTypes = ['infantry', 'archer', 'cavalry'];
   const troopType = troopTypes[Math.floor(Math.random() * 3)];
   quests.push({
@@ -457,15 +351,9 @@ function updateQuestProgress(type, data) {
     if (q.completed) return;
     allCompleted = false;
     if (q.type === type) {
-      if (type === 'resource' && q.resource === data) {
-        q.progress++;
-      }
-      if (type === 'monster') {
-        q.progress++;
-      }
-      if (type === 'troop' && q.troopType === data) {
-        q.progress++;
-      }
+      if (type === 'resource' && q.resource === data) q.progress++;
+      if (type === 'monster') q.progress++;
+      if (type === 'troop' && q.troopType === data) q.progress++;
       if (q.progress >= q.target) {
         q.completed = true;
         giveQuestReward(q.reward);
@@ -474,14 +362,12 @@ function updateQuestProgress(type, data) {
       }
     }
   });
-
   if (quests.every(q => q.completed)) {
     questSetNumber++;
     logBattle(`🌟 New Quest Set Unlocked! Difficulty Increased.`);
     showRewardPopup(`🌟 New Quests Available!`);
     generateQuests();
   }
-
   renderQuests();
 }
 
@@ -492,83 +378,12 @@ function giveQuestReward(reward) {
   });
 }
 
-// === Hook Quest Progress into existing systems ===
-const originalCollectResource = collectResource;
-collectResource = function (spot) {
-  originalCollectResource(spot);
-  updateQuestProgress('resource', spot.type);
-};
-
-const originalEngageBattle = engageBattle;
-engageBattle = function (monster) {
-  originalEngageBattle(monster);
-  if (monster.collected) {
-    updateQuestProgress('monster');
-  }
-};
-
-const originalBuildTroop = buildTroop;
-buildTroop = function (type) {
-  originalBuildTroop(type);
-  updateQuestProgress('troop', type);
-};
-
-// === INIT QUESTS ===
+// === INIT ===
+generateSpots(300);
 generateQuests();
 renderQuests();
 
-// === MOBILE TOUCH CONTROLS ===
-let lastTouchDistance = null;
-let lastTouchX = null;
-let lastTouchY = null;
-
-canvas.addEventListener('touchstart', e => {
-  if (e.touches.length === 2) {
-    const dx = e.touches[0].clientX - e.touches[1].clientX;
-    const dy = e.touches[0].clientY - e.touches[1].clientY;
-    lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
-  } else if (e.touches.length === 1) {
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
-  }
-}, { passive: false });
-
-canvas.addEventListener('touchmove', e => {
-  e.preventDefault();
-  if (e.touches.length === 2) {
-    const dx = e.touches[0].clientX - e.touches[1].clientX;
-    const dy = e.touches[0].clientY - e.touches[1].clientY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const delta = distance - lastTouchDistance;
-    zoom += delta * 0.003;
-    zoom = Math.min(Math.max(0.3, zoom), 2);
-    lastTouchDistance = distance;
-    clampOffset();
-  } else if (e.touches.length === 1) {
-    const deltaX = e.touches[0].clientX - lastTouchX;
-    const deltaY = e.touches[0].clientY - lastTouchY;
-    offsetX += deltaX;
-    offsetY += deltaY;
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
-    clampOffset();
-  }
-}, { passive: false });
-
-canvas.addEventListener('touchend', () => {
-  lastTouchDistance = null;
-  lastTouchX = null;
-  lastTouchY = null;
-});
-
-
-
-
-// --- INIT ---
-generateSpots(300);
-draw();
-
 window.addEventListener('resize', () => {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  stage.width(window.innerWidth);
+  stage.height(window.innerHeight);
 });
